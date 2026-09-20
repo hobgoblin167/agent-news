@@ -1,9 +1,10 @@
 import requests
+import json
 
 LLM_URL = "http://127.0.0.1:8080/v1/chat/completions"
 
 
-def summarize_article(article: list[dict]) -> str:
+def summarize_article(article: list[dict], stream_callback=None) -> str:
     combined_articles = []
 
 
@@ -40,25 +41,29 @@ def summarize_article(article: list[dict]) -> str:
     5. Не пропускай значимые события.
     6. Не выдумывай факты.
     7. Используй только информацию из предоставленных текстов.
+    8. Выделяй названия разделов, заголовки новостей и подписи
+       «Коротко:», «Почему это важно:» жирным Markdown: **текст**.
+       Основной текст оставляй обычным. Не заключай ответ в блок кода.
+    9. Заголовки пиши на русском языке
 
     Формат ответа:
 
-    ГЛАВНОЕ
+    **ГЛАВНОЕ**
 
-    1. Заголовок
-    Коротко:
-    Почему это важно:
+    1. **Заголовок**
+    **Коротко:**
+    **Почему это важно:**
 
-    2. Заголовок
-    Коротко:
-    Почему это важно:
+    2. **Заголовок**
+    **Коротко:**
+    **Почему это важно:**
 
-    ДЕТАЛИ
+    **ДЕТАЛИ**
 
     - Дополнительные важные факты
     - Что ещё стоит знать
 
-    МЕНЕЕ ВАЖНОЕ
+    **МЕНЕЕ ВАЖНОЕ**
 
     - Заголовок — одно предложение
     - Заголовок — одно предложение
@@ -68,37 +73,49 @@ def summarize_article(article: list[dict]) -> str:
     {combined_articles}
     """
 
-    try:
-        response = requests.post(
-            LLM_URL,
-            json={
-                "model": "local-model",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                "temperature": 0.2,
-                "max_tokens": 800
-            },
-            timeout=300
-        )
+    response = requests.post(
+        LLM_URL,
+        json={
+            "model": "local-model",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            "temperature": 0.2,
+            "max_tokens": 1800,
+            "stream": True
+        },
+        stream=True,
+        timeout=600
+    )
 
-        print("LLM status:", response.status_code)
-
+    full_text = ""
+    with response:
         response.raise_for_status()
+        for line in response.iter_lines(chunk_size=1):
+            if not line:
+                continue
+            decoded = line.decode("utf-8")
+            if not decoded.startswith("data:"):
+                continue
+            data = decoded[5:].strip()
+            if data == "[DONE]":
+                break
+            chunk = json.loads(data)
+            choices = chunk.get("choices") or []
+            if not choices:
+                continue
+            content = choices[0].get("delta", {}).get("content")
+            if content:
+                if stream_callback is not None:
+                    stream_callback(content)
+                else:
+                    print(content, end="", flush=True)
+                full_text += content
 
-        data = response.json()
+    if stream_callback is None:
+        print()
 
-        message = data["choices"][0]["message"]
-
-        digest = message.get("content", "").strip()
-
-    except Exception as e:
-        print("Ошибка Qwen:")
-        print(e)
-
-        digest = "Ошибка суммаризации."
-
-    return digest
+    return full_text

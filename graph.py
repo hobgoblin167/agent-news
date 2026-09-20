@@ -1,4 +1,5 @@
 from typing import TypedDict
+from typing import Callable
 
 from langgraph.graph import StateGraph, START, END
 
@@ -11,11 +12,23 @@ class NewState(TypedDict, total=False):
     feed_items:list[dict]
     new_articles:list[dict]
     digest:str
+    log_callback: Callable
+    stream_callback: Callable
 
 def node_fetch_feed(state: NewState):
-    print("Запуск Fetch_feed:")
+
+    log(
+        state,
+        "Получаем RSS..."
+    )
+
     items = fetch_feed()
-    print(f"Found {len(items)} articles in feed")
+
+    log(
+        state,
+        f"Найдено статей: {len(items)}"
+    )
+
     return {
         "feed_items": items
     }
@@ -30,7 +43,7 @@ def node_find_new(state: NewState):
         for article in feed_items
         if article["id"] not in existing_ids
     ]
-    new_articles = new_articles[:2]
+    new_articles = new_articles
     return{
         "new_articles": new_articles
     }
@@ -42,24 +55,34 @@ def route_new_articles(state: NewState):
     return "end"
 
 def node_fetch_article(state: NewState):
-    articles=[]
-    for i in state["new_articles"]:
-        print(f"Загрузка: {i['title']}")
-        article=fetch_article_text(i)
+    articles = []
+
+    for article in state["new_articles"]:
+        log(
+            state,
+            f"Загрузка: {article['title']}"
+        )
+
+        article = fetch_article_text(
+            article
+        )
+
         articles.append(article)
+
     return {
-        'new_articles': articles
+        "new_articles": articles
     }
 #суммаризация
 def node_sum_article(state: NewState):
     articles = state["new_articles"]
 
-    print(
-        f"Отправляем {len(articles)} новостей "
-        f"в Qwen одним запросом..."
+    log(
+        state,
+        f"Отправляем {len(articles)} "
+        f"новостей в Qwen..."
     )
 
-    digest = summarize_article(articles)
+    digest = summarize_article(articles, stream_callback=state.get("stream_callback"))
 
     return {
         "digest": digest
@@ -73,6 +96,21 @@ def node_save(state: NewState):
     print(f"Saved {len(articles)} articles")
 
     return {}
+
+#logs
+def log(state: NewState, text: str):
+
+    callback = state.get(
+        "log_callback"
+    )
+
+    if callback:
+
+        callback(text)
+
+    else:
+
+        print(text)
 
 #Строим граф
 builder = StateGraph(NewState)

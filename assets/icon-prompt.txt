@@ -1,0 +1,4 @@
+Generated with the built-in image_gen tool. PNG master: news-agent.png. Windows icon: news-agent.ico (16–256 px).
+
+Prompt:
+Use case: logo-brand. Create a single polished Windows desktop app icon for a minimal Russian AI news reader. Square 1024x1024 PNG. A large purple rounded-square tile with subtly luminous violet gradient, a crisp white folded newspaper/document symbol with three bold simple lines, integrated small four-point AI sparkle at upper right. Strong silhouette legible at 16px, restrained premium design, frontal orthographic, no text, no letters, no mockup, no extra objects. Tile almost fills canvas with narrow transparent outer margin. Actual transparent background outside the tile. Existing app accent is #6354cf.
